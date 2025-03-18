@@ -1,6 +1,6 @@
 # Custom fork to allow making a wheel from an already compiled .so file.
 # Pull request pending.
-{ stdenv, fetchFromGitHub, rustPlatform, dbus, gmp, openssl, pkgconfig
+{ stdenv, fetchFromGitHub, rustPlatform, dbus, gmp, openssl, pkg-config
 , darwin, lib }:
 
 let
@@ -49,9 +49,9 @@ in rustPlatform.buildRustPackage rec {
 
   src = builtins.filterSource sourceFilter ./.;
 
-  cargoSha256 = "1yf9v50cl2w3xka7y2nvg9vb6nk3vb0pazss8rlv5bjxipv0672a";
+  cargoLock = { lockFile = ./Cargo.lock; };
 
-  nativeBuildInputs = [ pkgconfig ];
+  nativeBuildInputs = [ pkg-config ];
 
   buildInputs = [ gmp openssl ]
     ++ lib.optional stdenv.isDarwin Security
