@@ -142,6 +142,35 @@ fn so_target(module_name: &str, py: &Option<PythonInterpreter>) -> PathBuf {
     path
 }
 
+/// Check if a file is a build artifact left behind by `maturin develop`.
+///
+/// See https://github.com/PyO3/maturin/blob/v1.13.3/src/module_writer/mod.rs#L501
+fn is_develop_build_artifact(relative: &std::path::Path, extension_name: &str) -> bool {
+    let lib_prefix = format!("lib{}", extension_name);
+    let name_matches =
+        |name: &str| name.starts_with(extension_name) || name.starts_with(&lib_prefix);
+
+    // Files inside a macOS `.dSYM` debug-info bundle: match on the bundle directory name rather
+    // than the leaf filename (which may be `Info.plist`, a DWARF file, etc.).
+    if let Some(bundle) = relative
+        .components()
+        .map(|c| c.as_os_str().to_string_lossy())
+        .find(|c| c.ends_with(".dSYM"))
+    {
+        return name_matches(bundle.trim_end_matches(".dSYM"));
+    }
+
+    let Some(file_name) = relative.file_name().map(|n| n.to_string_lossy()) else {
+        return false;
+    };
+    let is_native_ext = file_name.ends_with(".so")
+        || file_name.ends_with(".pyd")
+        || file_name.ends_with(".dll")
+        || file_name.ends_with(".dylib");
+    let is_debuginfo = file_name.ends_with(".pdb") || file_name.ends_with(".dwp");
+    (is_native_ext || is_debuginfo) && name_matches(&file_name)
+}
+
 fn main() {
     let opt = Opt::from_args();
 
@@ -178,12 +207,16 @@ fn main() {
                 // Add the pure python part of a mixed package, preserving paths relative to the
                 // python source directory
                 if let Some(python_source) = &python_source {
+                    let extension_name = module_name.rsplit('.').next().unwrap_or(&module_name);
                     for entry in WalkDir::new(python_source) {
                         let entry = entry.expect("walk python source");
                         if !entry.file_type().is_file() {
                             continue;
                         }
                         let absolute = entry.path();
+                        let relative = absolute
+                            .strip_prefix(python_source)
+                            .expect("python source prefix");
                         // Don't include python bytecode caches
                         if absolute
                             .components()
@@ -192,9 +225,11 @@ fn main() {
                         {
                             continue;
                         }
-                        let relative = absolute
-                            .strip_prefix(python_source)
-                            .expect("python source prefix");
+                        // Don't include compiled extension artifacts left behind by `maturin
+                        // develop`; we add the real `.so` ourselves below.
+                        if is_develop_build_artifact(relative, extension_name) {
+                            continue;
+                        }
                         writer
                             .add_file(relative, absolute)
                             .expect("add python file");
