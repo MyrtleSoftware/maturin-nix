@@ -64,7 +64,7 @@ impl Info {
         // The manifest directory is only used when the target toml file points to a readme.
         let manifest_dir = self.manifest_path.parent().unwrap();
 
-        Metadata21::from_cargo_toml(&cargo_toml, &manifest_dir).expect("metadata21")
+        Metadata21::from_cargo_toml(&cargo_toml, manifest_dir).expect("metadata21")
     }
 
     /// Resolve the final module name and (optional) pure-python source directory, taking
@@ -101,7 +101,6 @@ impl Info {
     about = "Tool for building pyo3 wheels inside nix",
     global_settings(&[AppSettings::ColoredHelp, AppSettings::VersionlessSubcommands])
 )]
-
 enum Opt {
     #[structopt(name = "build")]
     /// Build the crate into wheels
@@ -172,7 +171,7 @@ fn main() {
                     &output_dir,
                     &info.meta21(),
                     &std::collections::HashMap::default(),
-                    &[tag.clone()],
+                    std::slice::from_ref(&tag),
                 )
                 .expect("writer");
 
